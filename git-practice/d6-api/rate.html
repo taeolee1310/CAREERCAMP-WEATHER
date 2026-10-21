@@ -102,6 +102,10 @@ const API = {
 };
 const LABELS = { latest:"오늘 환율", series:"최근 30일 추이" };
 
+// 실패 이유는 사람이 읽을 수 있게: 영어 오류 문구나 HTTP 번호를 그대로 보여 주지 않는다
+const whyFailed = e => /Failed to fetch|NetworkError|Load failed/i.test(e.message) ? " 인터넷 연결을 확인해 주세요."
+  : /^HTTP (\d+)/.test(e.message) ? " (서버 오류 " + e.message.slice(5) + ")" : " (" + e.message + ")";
+
 const $ = id => document.getElementById(id);
 const fmt = (n, max) => new Intl.NumberFormat("ko-KR", { maximumFractionDigits: max }).format(n);
 let rate = null, asOf = "";
@@ -175,7 +179,7 @@ async function loadTrend() {
   } catch (e) {
     if (my !== trendRun) return;
     el.className = "error";
-    el.textContent = "⚠️ 추이를 불러오지 못했어요. 잠시 뒤 다시 골라 주세요.";
+    el.textContent = "⚠️ 추이를 불러오지 못했어요. 잠시 뒤 다시 골라 주세요." + whyFailed(e);
     el.title = e.message;
   }
 }
@@ -203,7 +207,7 @@ async function load() {
     if (my !== rateRun) return;
     rate = null;
     out.className = "result error";
-    out.textContent = "⚠️ 환율을 불러오지 못했어요. 잠시 뒤 다시 골라 주세요.";
+    out.textContent = "⚠️ 환율을 불러오지 못했어요. 잠시 뒤 다시 골라 주세요." + whyFailed(e);
     out.title = e.message;
   }
 }

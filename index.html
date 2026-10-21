@@ -141,7 +141,7 @@
 <main>
   <button class="theme" id="theme" type="button" role="switch" aria-checked="false" aria-label="다크 모드"><span class="ico moon" aria-hidden="true">🌙</span><span class="ico sun" aria-hidden="true">☀️</span><span class="knob"></span></button>
   <h1>🧭 나의 API 화면</h1>
-  <p class="lead">탭을 눌러 화면을 바꿔요. 탭은 처음 열 때만 API를 불러와요.</p>
+  <p class="lead">탭을 눌러 화면을 바꿔 보세요. 처음 연 탭만 API를 불러와요.</p>
 
   <div class="tabs" role="tablist" aria-label="화면 분류">
     <button class="tab" role="tab" id="tab-weather" data-tab="weather" aria-controls="panel-weather" aria-selected="true">🌤️ 날씨</button>
@@ -288,9 +288,12 @@ async function getJSON(id, url) {
 }
 function forget(prefix) { Object.keys(used).forEach(k => { if (k.startsWith(prefix)) delete used[k]; }); }
 function show(el, cls, html) { el.className = "body " + cls; el.innerHTML = html; }
-function fail(el, e, msg) { show(el, "error", ""); el.textContent = "⚠️ " + (msg || "불러오지 못했어요. 잠시 뒤 다시 해 주세요.") + " (" + e.message + ")"; }
+// 실패 이유는 사람이 읽을 수 있게: 영어 오류 문구나 HTTP 번호를 그대로 보여 주지 않는다
+const whyFailed = e => /Failed to fetch|NetworkError|Load failed/i.test(e.message) ? " 인터넷 연결을 확인해 주세요."
+  : /^HTTP (\d+)/.test(e.message) ? " (서버 오류 " + e.message.slice(5) + ")" : " (" + e.message + ")";
+function fail(el, e, msg) { show(el, "error", ""); el.textContent = "⚠️ " + (e.friendly ? e.message : (msg || "불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.") + whyFailed(e)); }
 function loading(el, text) { show(el, "loading", text || "불러오는 중…"); }
-const partFail = (label, e) => `<div class="error">⚠️ ${label}: 불러오지 못했어요 (${esc(e.message)})</div>`;
+const partFail = (label, e) => `<div class="error">⚠️ ${label}: 불러오지 못했어요.${esc(whyFailed(e))}</div>`;
 
 const WEATHER = {
   0:["☀️","맑음"],1:["🌤️","대체로 맑음"],2:["⛅","구름 조금"],3:["☁️","흐림"],
@@ -307,7 +310,7 @@ function dustCell(label, k, v) {
   const g = grade(k, v);
   return `<div><small>${label}</small><b>${Math.round(v)}</b><span class="unit">µg/m³</span><br><span class="grade g${g}">${GRADES[g]}</span></div>`;
 }
-const DUST_NOTE = "등급은 환경부 기준 구간을 지금 값에 적용한 모델 추정값이라 실제 에어코리아 발표와 다를 수 있어요.";
+const DUST_NOTE = "환경부 등급은 하루 평균 기준이에요. 여기서는 지금 값(모델 추정)에 맞춰 본 거라 에어코리아 발표와 다를 수 있어요.";
 
 // ================= 화면 1: weather (서울 날씨) =================
 const weatherScreen = (() => {
@@ -354,13 +357,13 @@ const cityScreen = (() => {
     try { // 1번: 이름 → 좌표. 실패하면 2·3번은 부를 수 없다
       const g = await getJSON("city.geo", A.geo(name));
       if (my !== run) return;
-      if (!g.results || !g.results.length) throw new Error("검색 결과 없음 - 영어 이름(Seoul)이나 정식 이름(서울특별시)으로 검색해 보세요");
+      if (!g.results || !g.results.length) { const err = new Error("도시를 못 찾았어요. 영어 이름(Seoul)이나 정식 이름(서울특별시)으로 검색해 보세요."); err.friendly = true; throw err; }
       place = g.results.reduce((a, b) => (b.population || 0) > (a.population || 0) ? b : a); // 같은 이름이 여러 곳이면 인구가 가장 많은 곳
     } catch (e) {
       if (my !== run) return;
       fail(geoEl, e, "도시를 못 찾았어요.");
-      show(wxEl, "idle", "도시를 찾지 못해서 건너뛰었어요.");
-      show(airEl, "idle", "도시를 찾지 못해서 건너뛰었어요.");
+      show(wxEl, "idle", "도시를 먼저 찾아야 볼 수 있어요.");
+      show(airEl, "idle", "도시를 먼저 찾아야 볼 수 있어요.");
       return;
     }
     const { latitude: lat, longitude: lon } = place;
@@ -415,7 +418,7 @@ const rateScreen = (() => {
     } catch (e) {
       if (my !== rateRun) return;
       rate = null; out.className = "result error";
-      out.textContent = "⚠️ 환율을 불러오지 못했어요. 잠시 뒤 다시 골라 주세요."; out.title = e.message;
+      out.textContent = "⚠️ 환율을 불러오지 못했어요. 잠시 뒤 다시 골라 주세요." + whyFailed(e); out.title = e.message;
     }
   }
   function daysAgo(n) { // 오늘은 한국 시간 기준
@@ -519,7 +522,7 @@ const morningScreen = (() => {
     btn.disabled = true; loading(el);
     return card(el, async () => {
       const d = await getJSON("morning.dog", A.dog);
-      if (d.status !== "success") throw new Error("응답 이상");
+      if (d.status !== "success") throw new Error("서버가 예상과 다른 응답을 보냈어요");
       await new Promise((ok, no) => { const im = new Image(); im.onload = ok; im.onerror = () => no(new Error("사진을 못 받았어요")); im.src = d.message; }); // 사진 파일까지 받은 뒤에 보여 준다
       if (my !== dogRun) return;
       show(el, "", "");
@@ -542,7 +545,7 @@ const morningScreen = (() => {
       return `<li><span class="yr">${ev.year}</span><div><div class="txt" lang="en">${esc(ev.text)}</div>${link}</div></li>`;
     }).join("");
     show(el, "", `<div class="in"><ol class="hist">${items}</ol>
-      <div class="meta">${histAt + 1}~${Math.min(histAt + HIST_PAGE, n)}번째 / 모두 ${n}건 · 영어판 위키백과가 고른 사건이에요. 한국어판은 이 목록을 아직 제공하지 않아서 설명은 영어예요.${histKoErr ? " 한국어 문서 제목은 불러오지 못했어요." : ""}</div></div>`);
+      <div class="meta">${n}건 중 ${histAt + 1}~${Math.min(histAt + HIST_PAGE, n)}번째 · 영어판 위키백과가 고른 사건이에요. 한국어판에는 이 목록이 없어서 설명이 영어로 나와요.${histKoErr ? " 한국어 문서 제목은 불러오지 못했어요." : ""}</div></div>`);
   }
   const loadHistory = el => card(el, async () => {
     const [, mm, dd] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date()).split("-"); // 오늘 날짜는 한국 시간 기준

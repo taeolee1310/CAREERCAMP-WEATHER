@@ -134,9 +134,12 @@ let runId = 0;   // 검색을 연속으로 눌렀을 때 옛 응답이 새 화�
 
 function show(el, cls, html) { el.className = "body " + cls; el.innerHTML = html; }
 function loading(el) { show(el, "loading", "불러오는 중…"); }
+// 실패 이유는 사람이 읽을 수 있게: 영어 오류 문구나 HTTP 번호를 그대로 보여 주지 않는다
+const whyFailed = e => /Failed to fetch|NetworkError|Load failed/i.test(e.message) ? " 인터넷 연결을 확인해 주세요."
+  : /^HTTP (\d+)/.test(e.message) ? " (서버 오류 " + e.message.slice(5) + ")" : " (" + e.message + ")";
 function fail(el, e) {
   show(el, "error", "");
-  el.textContent = "⚠️ 불러오지 못했어요. 잠시 뒤 다시 검색해 주세요. (" + e.message + ")";
+  el.textContent = "⚠️ " + (e.friendly ? e.message : "불러오지 못했어요. 잠시 뒤 다시 검색해 주세요." + whyFailed(e));
 }
 async function getJSON(key, url) {
   used[key] = url;
@@ -175,13 +178,13 @@ async function search(name) {
   try {
     const g = await getJSON("geo", API.geo(name));
     if (my !== runId) return;
-    if (!g.results || !g.results.length) throw new Error("검색 결과 없음 - 영어 이름(Seoul)이나 정식 이름(서울특별시)으로 검색해 보세요");
+    if (!g.results || !g.results.length) { const err = new Error("도시를 못 찾았어요. 영어 이름(Seoul)이나 정식 이름(서울특별시)으로 검색해 보세요."); err.friendly = true; throw err; }
     place = g.results.reduce((a, b) => (b.population || 0) > (a.population || 0) ? b : a); // 같은 이름이 여러 곳이면 인구가 가장 많은 곳
   } catch (e) {
     if (my !== runId) return;
     fail(geoEl, e);
-    show(wxEl, "idle", "도시를 찾지 못해서 건너뛰었어요.");
-    show(airEl, "idle", "도시를 찾지 못해서 건너뛰었어요.");
+    show(wxEl, "idle", "도시를 먼저 찾아야 볼 수 있어요.");
+    show(airEl, "idle", "도시를 먼저 찾아야 볼 수 있어요.");
     renderApiBox();
     return;
   }
@@ -204,8 +207,8 @@ async function search(name) {
       if (my !== runId) return;
       const c = d.current;
       show(airEl, "", `<div class="in dust">${dustCell("미세먼지 PM10", "pm10", c.pm10)}${dustCell("초미세먼지 PM2.5", "pm2_5", c.pm2_5)}</div>
-        <div class="meta">기준 시각: ${c.time.replace("T"," ")} (현지 시간) · 모델 추정값이에요.<br>
-        등급은 환경부 기준(하루 평균용 구간)을 지금 값에 적용한 거라, 실제 에어코리아 발표와 다를 수 있어요.<br>
+        <div class="meta">기준 시각: ${c.time.replace("T"," ")} (현지 시간)<br>
+        환경부 등급은 하루 평균 기준이에요. 여기서는 지금 값(모델 추정)에 맞춰 본 거라 에어코리아 발표와 다를 수 있어요.<br>
         PM10: 좋음 0~30 · 보통 31~80 · 나쁨 81~150 · 매우 나쁨 151~ / PM2.5: 좋음 0~15 · 보통 16~35 · 나쁨 36~75 · 매우 나쁨 76~</div>`);
     }).catch(e => { if (my === runId) fail(airEl, e); })
   ]);

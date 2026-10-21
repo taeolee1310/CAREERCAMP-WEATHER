@@ -129,7 +129,10 @@ function cleanHex(v) {
 const esc = s => String(s).replace(/[<>&"]/g, "");
 
 function show(el, cls, html) { el.className = "body " + cls; el.innerHTML = html; }
-function fail(el, e) { show(el, "error", ""); el.textContent = "⚠️ 불러오지 못했어요. 잠시 뒤 다시 찾아 주세요. (" + e.message + ")"; }
+// 실패 이유는 사람이 읽을 수 있게: 영어 오류 문구나 HTTP 번호를 그대로 보여 주지 않는다
+const whyFailed = e => /Failed to fetch|NetworkError|Load failed/i.test(e.message) ? " 인터넷 연결을 확인해 주세요."
+  : /^HTTP (\d+)/.test(e.message) ? " (서버 오류 " + e.message.slice(5) + ")" : " (" + e.message + ")";
+function fail(el, e) { show(el, "error", ""); el.textContent = "⚠️ 불러오지 못했어요. 잠시 뒤 다시 찾아 주세요." + whyFailed(e); }
 async function getJSON(key, url) {
   used[key] = url;
   renderApiBox();
@@ -141,7 +144,7 @@ async function getJSON(key, url) {
 function sw(c, i) {
   const hex = c.hex.value.replace("#", ""), fg = c.contrast.value; // API가 알려 주는 읽기 쉬운 글자색
   return `<button type="button" class="sw" data-hex="${esc(hex)}" style="background:${esc(c.hex.value)};color:${esc(fg)};animation-delay:${i * 50}ms"
-    aria-label="${esc(c.name.value)} ${esc(c.hex.value)} 로 다시 찾기"><b>${esc(c.hex.value)}</b><span>${esc(c.name.value)}</span></button>`;
+    aria-label="다시 찾기: ${esc(c.name.value)} ${esc(c.hex.value)}"><b>${esc(c.hex.value)}</b><span>${esc(c.name.value)}</span></button>`;
 }
 
 async function search(raw) {

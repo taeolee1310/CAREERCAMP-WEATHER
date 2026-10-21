@@ -165,8 +165,11 @@ async function getJSON(key, url = API[key]) {
   return res.json();
 }
 function show(el, cls, html) { el.className = "body " + cls; el.innerHTML = html; }
-function fail(el, e) { show(el, "error", ""); el.textContent = "⚠️ 불러오지 못했어요. (" + e.message + ")"; }
-const partFail = (label, e) => `<div class="error">⚠️ ${label}: 불러오지 못했어요 (${String(e.message).replace(/[<>&]/g, "")})</div>`;
+// 실패 이유는 사람이 읽을 수 있게: 영어 오류 문구나 HTTP 번호를 그대로 보여 주지 않는다
+const whyFailed = e => /Failed to fetch|NetworkError|Load failed/i.test(e.message) ? " 인터넷 연결을 확인해 주세요."
+  : /^HTTP (\d+)/.test(e.message) ? " (서버 오류 " + e.message.slice(5) + ")" : " (" + e.message + ")";
+function fail(el, e) { show(el, "error", ""); el.textContent = "⚠️ 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요." + whyFailed(e); }
+const partFail = (label, e) => `<div class="error">⚠️ ${label}: 불러오지 못했어요.${esc(whyFailed(e))}</div>`;
 
 // 카드 하나 = 함수 하나. 서로 기다리지 않고, 하나가 던진 오류는 그 카드에서만 잡는다
 async function card(el, render) {
@@ -203,7 +206,7 @@ function loadWeather(el) {
       html += `<div class="pair">${dustCell("미세먼지 PM10", "pm10", c.pm10)}${dustCell("초미세먼지 PM2.5", "pm2_5", c.pm2_5)}</div>`;
       metas.push("미세먼지 기준 시각 " + c.time.replace("T", " "));
     } else html += partFail("미세먼지", a.reason);
-    html += `<div class="meta">${metas.join(" · ")} (KST) · 등급은 환경부 기준 구간을 지금 값에 적용한 모델 추정값이에요.</div>`;
+    html += `<div class="meta">${metas.join(" · ")} (KST) · 환경부 등급은 하루 평균 기준이에요. 여기서는 지금 값(모델 추정)에 맞춰 본 거라 에어코리아 발표와 다를 수 있어요.</div>`;
     show(el, "", `<div class="in">${html}</div>`);
   });
 }
@@ -245,7 +248,7 @@ function loadDog() {
   el.className = "body loading"; el.textContent = "불러오는 중…";
   return card(el, async () => {
     const d = await getJSON("dog");
-    if (d.status !== "success") throw new Error("응답 이상");
+    if (d.status !== "success") throw new Error("서버가 예상과 다른 응답을 보냈어요");
     await new Promise((ok, no) => { // 사진 파일까지 내려받은 뒤에 보여 준다
       const img = new Image();
       img.onload = ok; img.onerror = () => no(new Error("사진을 못 받았어요"));
@@ -276,7 +279,7 @@ function renderHistory() {
   }).join("");
   const from = histAt + 1, to = Math.min(histAt + HIST_PAGE, n);
   show(el, "", `<div class="in"><ol class="hist">${items}</ol>
-    <div class="meta">${from}~${to}번째 / 모두 ${n}건 · 영어판 위키백과가 고른 사건이에요. 한국어판은 이 목록을 아직 제공하지 않아서 설명은 영어예요.${histKoErr ? " 한국어 문서 제목은 불러오지 못했어요." : ""}</div></div>`);
+    <div class="meta">${n}건 중 ${from}~${to}번째 · 영어판 위키백과가 고른 사건이에요. 한국어판에는 이 목록이 없어서 설명이 영어로 나와요.${histKoErr ? " 한국어 문서 제목은 불러오지 못했어요." : ""}</div></div>`);
 }
 function loadHistory(el) {
   const [, mm, dd] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date()).split("-"); // 오늘 날짜는 한국 시간 기준

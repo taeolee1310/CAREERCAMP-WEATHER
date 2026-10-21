@@ -138,6 +138,10 @@ const WEATHER = {
 const wx = c => WEATHER[c] || ["🌡️","알 수 없음"];
 
 // 한 카드가 실패해도 다른 카드는 보이도록 각각 따로 부른다
+// 실패 이유는 사람이 읽을 수 있게: 영어 오류 문구나 HTTP 번호를 그대로 보여 주지 않는다
+const whyFailed = e => /Failed to fetch|NetworkError|Load failed/i.test(e.message) ? " 인터넷 연결을 확인해 주세요."
+  : /^HTTP (\d+)/.test(e.message) ? " (서버 오류 " + e.message.slice(5) + ")" : " (" + e.message + ")";
+
 async function load(url, bodyId, render) {
   const el = document.getElementById(bodyId);
   try {
@@ -147,7 +151,7 @@ async function load(url, bodyId, render) {
     el.classList.remove("loading");
   } catch (e) {
     el.className = "error";
-    el.textContent = "⚠️ 불러오지 못했어요. 잠시 뒤 새로고침해 주세요. (" + e.message + ")";
+    el.textContent = "⚠️ 불러오지 못했어요. 잠시 뒤 새로고침해 주세요." + whyFailed(e);
   }
 }
 
