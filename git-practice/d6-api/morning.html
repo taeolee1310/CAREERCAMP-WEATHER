@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>나의 아침 대시보드</title>
+<style>
+  :root { --bg:#eaf1fb; --card:#fff; --text:#1d1d1f; --sub:#6e6e73; --err:#d70015; --line:#d9e2f1; --chip:#f2f6fc; --accent:#2f6fed;
+          --ease:cubic-bezier(.23,1,.32,1); --edge:var(--line); }
+  :root[data-theme=dark] { --bg:#0b0f17; --card:#161b26; --text:#f5f5f7; --sub:#a1a1a6; --err:#ff6961; --line:#2e3648; --chip:#1d2433; --accent:#3b6fe0; color-scheme:dark; }
+  @media (prefers-color-scheme:dark) {
+    :root:not([data-theme=light]) { --bg:#0b0f17; --card:#161b26; --text:#f5f5f7; --sub:#a1a1a6; --err:#ff6961; --line:#2e3648; --chip:#1d2433; --accent:#3b6fe0; color-scheme:dark; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:40px 16px 56px; color:var(--text); min-height:100vh; background:var(--bg);
+         font:100%/1.5 system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; }
+  main { max-width:720px; margin:0 auto; }
+  h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.15; letter-spacing:-.03em; margin:0 0 .4rem; }
+  .lead { color:var(--sub); font-size:.95rem; margin:0 0 1.5rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:20px; padding:1.25rem 1.4rem; margin-bottom:1rem; }
+  .card h2 { font-size:.8rem; margin:0 0 .9rem; color:var(--sub); font-weight:600; letter-spacing:.04em; display:flex; justify-content:space-between; align-items:center; }
+  .loading { color:var(--sub); animation:pulse 1.4s ease-in-out infinite; }
+  .error { color:var(--err); font-size:.9rem; }
+  .body > .in { animation:rise .35s var(--ease) both; }
+  .row { display:flex; align-items:center; gap:1rem; }
+  .icon { font-size:3rem; line-height:1; }
+  .temp { font-size:3rem; line-height:1; font-weight:700; letter-spacing:-.04em; }
+  .desc { color:var(--sub); font-size:.9rem; margin-top:.3rem; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; margin-top:.9rem; }
+  .pair > div { background:var(--chip); border-radius:16px; padding:.8rem 1rem; }
+  .pair small { color:var(--sub); display:block; font-size:.78rem; }
+  .pair b { font-size:1.5rem; letter-spacing:-.02em; }
+  .pair .unit { color:var(--sub); font-size:.8rem; margin-left:.2rem; }
+  .grade { display:inline-block; margin-top:.3rem; padding:.1rem .65rem; border-radius:999px; font-size:.8rem; font-weight:700; color:#fff; }
+  .g0 { background:#1e6fe0; } .g1 { background:#1a8f4a; } .g2 { background:#c26a00; } .g3 { background:#d70015; }
+  .dday { font-size:3rem; line-height:1; font-weight:700; letter-spacing:-.04em; color:var(--accent); }
+  .meta { color:var(--sub); font-size:.75rem; margin-top:.8rem; }
+  .dogbox { aspect-ratio:4/3; max-height:340px; width:100%; border-radius:16px; background:var(--chip); overflow:hidden; }
+  .dogbox img { width:100%; height:100%; object-fit:cover; display:block; }
+  .mini { font:inherit; font-size:.8rem; font-weight:600; padding:.4rem .9rem; min-height:44px; border:0; border-radius:999px; background:var(--accent); color:#fff;
+          cursor:pointer; transition:transform .12s ease-out; }
+  .mini:active { transform:scale(.97); }
+  .mini:disabled { opacity:.5; cursor:default; transform:none; }
+  .mini:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  .hist { list-style:none; padding:0; margin:0; display:grid; gap:.2rem; }
+  .hist li { display:grid; grid-template-columns:3.6rem 1fr; gap:.6rem; align-items:baseline; }
+  .hist .yr { font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums; }
+  .hist .txt { font-size:.9rem; line-height:1.5; }
+  .hist a { display:inline-flex; align-items:center; min-height:44px; color:var(--accent); font-size:.8rem; font-weight:600; } /* 터치 대상 44px */
+  .apibox { background:#10233f; border-color:#10233f; color:#dce6f5; }
+  .apibox h2 { color:#9fb6d8; }
+  .apibox ul { padding:0; margin:0; }
+  .apibox li { list-style:none; margin-bottom:.9rem; }
+  .apibox code { display:block; word-break:break-all; font-size:.75rem; margin:.2rem 0 .3rem; color:#fff; }
+  .apibox a { color:#8fb8ff; font-size:.8rem; }
+  .apibox .meta { color:#9fb6d8; }
+  footer { color:var(--sub); font-size:.75rem; text-align:center; margin-top:1.5rem; }
+  @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  @keyframes pulse { 50% { opacity:.45; } }
+  @keyframes opacity-in { from { opacity:0; } to { opacity:1; } }
+  @media (prefers-reduced-motion:reduce) {
+    .body > .in { animation:opacity-in .2s ease both; }
+    .loading { animation:none; }
+    .mini { transition:none; }
+  }
+  main { position:relative; }
+  h1 { padding-right:5rem; }
+  /* 스위치 토글: 손잡이가 미끄러지며 해/달 쪽으로 이동 */
+  .theme { position:absolute; top:0; right:0; width:3.5rem; height:2rem; padding:0; border:1px solid var(--edge); border-radius:999px;
+           background:#cfe0fb; cursor:pointer; transition:background .35s var(--ease), transform .12s ease-out; }
+  .theme[aria-checked=true] { background:#2c3a5c; }
+  .theme:active { transform:scale(.96); }
+  .theme:focus-visible { outline:3px solid #2f6fed; outline-offset:2px; }
+  .theme .ico { position:absolute; top:50%; transform:translateY(-50%); font-size:.8rem; line-height:1; opacity:.55; }
+  .theme .sun { right:.45rem; } .theme .moon { left:.45rem; }
+  .theme .knob { position:absolute; top:.17rem; left:.17rem; width:1.5rem; height:1.5rem; border-radius:50%; background:#fff;
+                 box-shadow:0 1px 4px rgba(0,0,0,.3); transition:transform .4s cubic-bezier(.34,1.4,.64,1); }
+  .theme[aria-checked=true] .knob { transform:translateX(1.5rem); }
+  @media (prefers-reduced-motion:reduce) { .theme, .theme .knob { transition:none; } }
+</style>
+</head>
+<body>
+<main>
+  <button class="theme" id="theme" type="button" role="switch" aria-checked="false" aria-label="다크 모드"><span class="ico moon" aria-hidden="true">🌙</span><span class="ico sun" aria-hidden="true">☀️</span><span class="knob"></span></button>
+  <h1 id="hello">안녕하세요</h1>
+  <p class="lead" id="today"></p>
+
+  <section class="card">
+    <h2><span>🌤️ 우리 동네 날씨 + 미세먼지 · <span id="placeName"></span></span></h2>
+    <div id="wxBody" class="body loading">불러오는 중…</div>
+  </section>
+
+  <section class="card">
+    <h2>💱 오늘의 환율 (원화 기준)</h2>
+    <div id="fxBody" class="body loading">불러오는 중…</div>
+  </section>
+
+  <section class="card">
+    <h2>🎌 다음 공휴일까지</h2>
+    <div id="holBody" class="body loading">불러오는 중…</div>
+  </section>
+
+  <section class="card">
+    <h2>🐶 오늘의 강아지 <button class="mini" id="dogBtn" type="button">다른 강아지</button></h2>
+    <div id="dogBody" class="body loading">불러오는 중…</div>
+  </section>
+
+  <section class="card">
+    <h2><span>📜 오늘의 역사 · <span id="histDate"></span></span> <button class="mini" id="histBtn" type="button" disabled>다른 사건</button></h2>
+    <div id="histBody" class="body loading">불러오는 중…</div>
+  </section>
+
+  <section class="card apibox">
+    <h2>🔌 이 화면이 쓰는 API</h2>
+    <ul id="apiList"></ul>
+    <div class="meta">카드마다 따로 불러요. 한 주소를 일부러 틀리게 바꿔도 나머지 카드는 그대로 보여요.</div>
+  </section>
+
+  <footer>
+    Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener" style="color:inherit">Open-Meteo.com</a> ·
+    환율 <a href="https://frankfurter.dev/" target="_blank" rel="noopener" style="color:inherit">Frankfurter</a> ·
+    공휴일 <a href="https://date.nager.at/" target="_blank" rel="noopener" style="color:inherit">Nager.Date</a> ·
+    강아지 <a href="https://dog.ceo/dog-api/" target="_blank" rel="noopener" style="color:inherit">Dog CEO</a> ·
+    오늘의 역사 <a href="https://www.wikipedia.org/" target="_blank" rel="noopener" style="color:inherit">Wikipedia</a> (CC BY-SA)
+  </footer>
+</main>
+
+<script>
+// 우리 동네: 여기 숫자만 바꾸면 다른 동네가 나와요 (기본: 서울 시청)
+const HOME = { name: "서울", lat: 37.5665, lon: 126.9780 };
+
+const API = {
+  wx:   `https://api.open-meteo.com/v1/forecast?latitude=${HOME.lat}&longitude=${HOME.lon}&current=temperature_2m,apparent_temperature,weather_code&timezone=Asia%2FSeoul`, // 🔌 날씨
+  air:  `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${HOME.lat}&longitude=${HOME.lon}&current=pm10,pm2_5&timezone=Asia%2FSeoul`, // 🔌 미세먼지
+  usd:  "https://api.frankfurter.dev/v1/latest?base=USD&symbols=KRW", // 🔌 1달러 → 원
+  jpy:  "https://api.frankfurter.dev/v1/latest?base=JPY&amount=100&symbols=KRW", // 🔌 100엔 → 원
+  hol:  "https://date.nager.at/api/v3/NextPublicHolidays/KR", // 🔌 한국 다음 공휴일
+  dog:  "https://dog.ceo/api/breeds/image/random", // 🔌 랜덤 강아지 사진
+  hist: (mm, dd) => `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/selected/${mm}/${dd}`, // 🔌 오늘의 역사 (한국어판은 이 피드 미지원이라 영어판)
+  ko:   titles => "https://en.wikipedia.org/w/api.php?action=query&format=json&prop=langlinks&lllang=ko&lllimit=max&redirects=1&origin=*&titles=" + encodeURIComponent(titles.join("|")) // 🔌 영어 문서의 한국어 제목
+};
+const LABELS = { wx:"날씨", air:"미세먼지", usd:"환율 (1달러)", jpy:"환율 (100엔)", hol:"다음 공휴일", dog:"강아지 사진", hist:"오늘의 역사", ko:"역사 문서의 한국어 제목" };
+
+const WEATHER = {
+  0:["☀️","맑음"],1:["🌤️","대체로 맑음"],2:["⛅","구름 조금"],3:["☁️","흐림"],
+  45:["🌫️","안개"],48:["🌫️","안개"],51:["🌦️","가벼운 이슬비"],53:["🌦️","이슬비"],55:["🌦️","강한 이슬비"],
+  61:["🌧️","약한 비"],63:["🌧️","비"],65:["🌧️","강한 비"],71:["🌨️","약한 눈"],73:["🌨️","눈"],75:["❄️","강한 눈"],
+  80:["🌦️","소나기"],81:["🌦️","소나기"],82:["⛈️","강한 소나기"],95:["⛈️","뇌우"],96:["⛈️","뇌우"],99:["⛈️","뇌우"]
+};
+const wx = c => WEATHER[c] || ["🌡️","알 수 없음"];
+const GRADES = ["좋음","보통","나쁨","매우 나쁨"];
+const LIMITS = { pm10:[30,80,150], pm2_5:[15,35,75] }; // 환경부 기준 (µg/m³)
+const grade = (k, v) => { const i = LIMITS[k].findIndex(m => Math.round(v) <= m); return i < 0 ? 3 : i; };
+
+const $ = id => document.getElementById(id);
+const fmt = (n, d = 0) => n.toLocaleString("ko-KR", { maximumFractionDigits: d, minimumFractionDigits: d });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); // 글·속성에 안전하게
+const used = {};
+
+async function getJSON(key, url = API[key]) {
+  used[key] = url;
+  renderApiBox();
+  const res = await fetch(url); // 🔌 API 호출
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+function show(el, cls, html) { el.className = "body " + cls; el.innerHTML = html; }
+function fail(el, e) { show(el, "error", ""); el.textContent = "⚠️ 불러오지 못했어요. (" + e.message + ")"; }
+const partFail = (label, e) => `<div class="error">⚠️ ${label}: 불러오지 못했어요 (${String(e.message).replace(/[<>&]/g, "")})</div>`;
+
+// 카드 하나 = 함수 하나. 서로 기다리지 않고, 하나가 던진 오류는 그 카드에서만 잡는다
+async function card(el, render) {
+  try { await render(el); } catch (e) { fail(el, e); }
+}
+
+// ---- 인사말 (한국 시간 기준) ----
+function greet() {
+  const h = +new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: "Asia/Seoul" }).format(new Date()) % 24;
+  const g = h < 5 ? ["🌙", "아직 새벽이에요"] : h < 11 ? ["☀️", "좋은 아침이에요"] : h < 17 ? ["🍚", "점심 맛있게 드세요"] : ["🌇", "좋은 저녁이에요"];
+  $("hello").textContent = g[0] + " " + g[1];
+  $("today").textContent = new Intl.DateTimeFormat("ko-KR", { dateStyle: "full", timeZone: "Asia/Seoul" }).format(new Date()) + " (한국 시간)";
+}
+
+// ---- 1) 날씨 + 미세먼지: 두 API가 따로 실패해도 나머지 절반은 보인다 ----
+function dustCell(label, k, v) {
+  if (v == null) return `<div><small>${label}</small><b>-</b></div>`;
+  const g = grade(k, v);
+  return `<div><small>${label}</small><b>${Math.round(v)}</b><span class="unit">µg/m³</span><br><span class="grade g${g}">${GRADES[g]}</span></div>`;
+}
+function loadWeather(el) {
+  return card(el, async () => {
+    const [w, a] = await Promise.allSettled([getJSON("wx"), getJSON("air")]);
+    if (w.status === "rejected" && a.status === "rejected") throw w.reason;
+    let html = "", metas = [];
+    if (w.status === "fulfilled") {
+      const c = w.value.current, [icon, text] = wx(c.weather_code);
+      html += `<div class="row"><div class="icon">${icon}</div><div><div class="temp">${Math.round(c.temperature_2m)}°C</div>
+        <div class="desc">${text} · 체감 ${Math.round(c.apparent_temperature)}°C</div></div></div>`;
+      metas.push("날씨 기준 시각 " + c.time.replace("T", " "));
+    } else html += partFail("날씨", w.reason);
+    if (a.status === "fulfilled") {
+      const c = a.value.current;
+      html += `<div class="pair">${dustCell("미세먼지 PM10", "pm10", c.pm10)}${dustCell("초미세먼지 PM2.5", "pm2_5", c.pm2_5)}</div>`;
+      metas.push("미세먼지 기준 시각 " + c.time.replace("T", " "));
+    } else html += partFail("미세먼지", a.reason);
+    html += `<div class="meta">${metas.join(" · ")} (KST) · 등급은 환경부 기준 구간을 지금 값에 적용한 모델 추정값이에요.</div>`;
+    show(el, "", `<div class="in">${html}</div>`);
+  });
+}
+
+// ---- 2) 환율: 달러/엔도 따로 ----
+function loadFx(el) {
+  return card(el, async () => {
+    const [u, j] = await Promise.allSettled([getJSON("usd"), getJSON("jpy")]);
+    if (u.status === "rejected" && j.status === "rejected") throw u.reason;
+    const cell = (label, r) => r.status === "fulfilled"
+      ? `<div><small>${label}</small><b>${fmt(r.value.rates.KRW, 1)}</b><span class="unit">원</span></div>`
+      : `<div><small>${label}</small><span class="error">불러오지 못했어요</span></div>`;
+    const dates = [u, j].filter(r => r.status === "fulfilled").map(r => r.value.date);
+    show(el, "", `<div class="in"><div class="pair" style="margin-top:0">${cell("1달러", u)}${cell("100엔", j)}</div>
+      <div class="meta">기준 날짜: ${dates[0]} · 유럽중앙은행이 하루 한 번 발표하는 기준 환율이라 실시간 시세와 달라요.</div></div>`);
+  });
+}
+
+// ---- 3) 다음 공휴일 D-day (오늘 날짜도 한국 시간 기준) ----
+function loadHoliday(el) {
+  return card(el, async () => {
+    const list = await getJSON("hol");
+    if (!list.length) throw new Error("공휴일 정보가 비어 있어요");
+    const h = list[0];
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date()); // YYYY-MM-DD
+    const diff = Math.round((Date.parse(h.date) - Date.parse(today)) / 864e5);
+    const d = diff === 0 ? "D-DAY" : "D-" + diff;
+    show(el, "", `<div class="in row"><div class="dday">${d}</div><div><b>${(h.localName || h.name).replace(/[<>&]/g, "")}</b>
+      <div class="desc">${h.date}</div></div></div>
+      <div class="meta">Nager.Date 공휴일 데이터 기준이에요. 대체공휴일·임시공휴일은 빠질 수 있어요.</div>`);
+  });
+}
+
+// ---- 4) 강아지: 이 카드만 새로고침 ----
+let dogRun = 0;
+function loadDog() {
+  const el = $("dogBody"), btn = $("dogBtn"), my = ++dogRun;
+  btn.disabled = true;
+  el.className = "body loading"; el.textContent = "불러오는 중…";
+  return card(el, async () => {
+    const d = await getJSON("dog");
+    if (d.status !== "success") throw new Error("응답 이상");
+    await new Promise((ok, no) => { // 사진 파일까지 내려받은 뒤에 보여 준다
+      const img = new Image();
+      img.onload = ok; img.onerror = () => no(new Error("사진을 못 받았어요"));
+      img.src = d.message;
+    });
+    if (my !== dogRun) return;
+    show(el, "", "");
+    const box = document.createElement("div"), img = document.createElement("img");
+    box.className = "dogbox in"; img.src = d.message; img.alt = "무작위로 고른 강아지 사진";
+    box.appendChild(img); el.appendChild(box);
+    const m = document.createElement("div"); m.className = "meta"; m.textContent = "사진은 누를 때마다 바뀌어요."; el.appendChild(m);
+  }).finally(() => { if (my === dogRun) btn.disabled = false; });
+}
+
+// ---- 5) 오늘의 역사: 영어판 위키백과 "선정 사건" + 한국어 문서 제목 (두 번째 API는 실패해도 영어로 보인다) ----
+const HIST_PAGE = 3; // 한 번에 보여 줄 사건 수
+let histEvents = [], histKo = {}, histKoErr = null, histAt = 0;
+function renderHistory() {
+  const el = $("histBody"), n = histEvents.length;
+  const slice = Array.from({ length: Math.min(HIST_PAGE, n) }, (_, i) => histEvents[(histAt + i) % n]);
+  const items = slice.map(ev => {
+    const p = ev.pages && ev.pages[0], en = p && p.titles.normalized;
+    const ko = en && histKo[en];
+    const link = !p ? "" : ko
+      ? `<a href="https://ko.wikipedia.org/wiki/${encodeURIComponent(ko.replace(/ /g, "_"))}" target="_blank" rel="noopener">한국어 문서: ${esc(ko)} ↗</a>`
+      : `<a href="${esc(p.content_urls.desktop.page)}" target="_blank" rel="noopener" lang="en">영어 문서: ${esc(en)} ↗</a>`;
+    return `<li><span class="yr">${ev.year}</span><div><div class="txt" lang="en">${esc(ev.text)}</div>${link}</div></li>`;
+  }).join("");
+  const from = histAt + 1, to = Math.min(histAt + HIST_PAGE, n);
+  show(el, "", `<div class="in"><ol class="hist">${items}</ol>
+    <div class="meta">${from}~${to}번째 / 모두 ${n}건 · 영어판 위키백과가 고른 사건이에요. 한국어판은 이 목록을 아직 제공하지 않아서 설명은 영어예요.${histKoErr ? " 한국어 문서 제목은 불러오지 못했어요." : ""}</div></div>`);
+}
+function loadHistory(el) {
+  const [, mm, dd] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date()).split("-"); // 오늘 날짜는 한국 시간 기준
+  $("histDate").textContent = +mm + "월 " + +dd + "일";
+  return card(el, async () => {
+    const d = await getJSON("hist", API.hist(mm, dd));
+    histEvents = (d.selected || []).filter(e => e.text).sort((a, b) => b.year - a.year);
+    if (!histEvents.length) throw new Error("오늘 날짜의 사건이 비어 있어요");
+    const titles = [...new Set(histEvents.map(e => e.pages && e.pages[0] && e.pages[0].titles.normalized).filter(Boolean))];
+    try { // 한국어 제목 조회: 실패해도 영어 목록은 그대로 보여 준다
+      const k = await getJSON("ko", API.ko(titles)), q = k.query || {};
+      const resolve = t => { [q.normalized, q.redirects].forEach(a => (a || []).forEach(r => { if (r.from === t) t = r.to; })); return t; };
+      const byTitle = {};
+      Object.values(q.pages || {}).forEach(pg => { if (pg.langlinks && pg.langlinks[0]) byTitle[pg.title] = pg.langlinks[0]["*"]; });
+      titles.forEach(t => { const ko = byTitle[resolve(t)]; if (ko) histKo[t] = ko; });
+    } catch (e) { histKoErr = e; }
+    histAt = 0; renderHistory();
+    $("histBtn").disabled = histEvents.length <= HIST_PAGE;
+  });
+}
+
+// ---- 🔌 상자: 실제로 부른 주소 ----
+function renderApiBox() {
+  const keys = Object.keys(API);
+  $("apiList").innerHTML = keys.map(k => `<li><b>${LABELS[k]}</b><code></code><a target="_blank" rel="noopener">새 탭에서 원본 JSON 보기 ↗</a></li>`).join("");
+  $("apiList").querySelectorAll("li").forEach((li, i) => {
+    const url = used[keys[i]];
+    li.querySelector("code").textContent = url || "아직 부르지 않았어요";
+    if (url) li.querySelector("a").href = url; else li.querySelector("a").remove();
+  });
+}
+
+$("placeName").textContent = HOME.name;
+$("dogBtn").addEventListener("click", loadDog);
+$("histBtn").addEventListener("click", () => { histAt = (histAt + HIST_PAGE) % histEvents.length; renderHistory(); }); // 이미 받은 목록을 넘겨 볼 뿐이라 API는 다시 부르지 않는다
+greet();
+renderApiBox();
+loadWeather($("wxBody"));
+loadFx($("fxBody"));
+loadHoliday($("holBody"));
+loadDog();
+loadHistory($("histBody"));
+// 라이트/다크 토글: 고른 값은 기억해 두고, 없으면 기기 설정을 따른다
+(function () {
+  const root = document.documentElement, btn = document.getElementById("theme");
+  const isDark = () => root.dataset.theme
+    ? root.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  function paint() {
+    btn.setAttribute("aria-checked", isDark());
+  }
+  try { const s = localStorage.getItem("theme"); if (s) root.dataset.theme = s; } catch (e) {}
+  btn.onclick = () => {
+    root.dataset.theme = isDark() ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+    paint();
+  };
+  paint();
+})();
+</script>
+</body>
+</html>

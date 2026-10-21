@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>서울 날씨</title>
+<style>
+  :root { --bg:#eaf1fb; --glass:rgba(255,255,255,.62); --edge:rgba(255,255,255,.7);
+          --text:#1d1d1f; --sub:#6e6e73; --err:#d70015; --chip:rgba(255,255,255,.55);
+          --ease:cubic-bezier(.22,1,.36,1); }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:40px 16px 56px; color:var(--text); min-height:100vh;
+         background:var(--bg);
+         font:100%/1.5 system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+         -webkit-font-smoothing:antialiased; }
+  /* 배경 그라디언트는 고정 레이어 하나로: 스크롤 때마다 다시 그리지 않게 */
+  body::before { content:''; position:fixed; inset:0; z-index:-1; pointer-events:none;
+         background:radial-gradient(1200px 600px at 20% -10%,#cfe3ff 0,transparent 60%),
+                    radial-gradient(900px 500px at 100% 0,#ffe3d1 0,transparent 55%); }
+  main { max-width:720px; margin:0 auto; }
+  h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; letter-spacing:-.03em; margin:0 0 .4rem; font-weight:700; }
+  .lead { color:var(--sub); font-size:.95rem; margin:0 0 1.5rem; }
+  .card { background:var(--glass); border:1px solid var(--edge); border-radius:22px; padding:1.25rem 1.4rem; margin-bottom:1rem;
+          -webkit-backdrop-filter:blur(14px) saturate(140%); backdrop-filter:blur(14px) saturate(140%);
+          box-shadow:0 1px 0 rgba(255,255,255,.8) inset, 0 8px 30px rgba(30,50,90,.08); }
+  .card h2 { font-size:.8rem; margin:0 0 .9rem; color:var(--sub); font-weight:600; letter-spacing:.04em; }
+  .loading { color:var(--sub); animation:pulse 1.4s ease-in-out infinite; }
+  .error { color:var(--err); }
+  #nowBody > *, #hourlyBody > *, #dailyBody > * { animation:rise .5s var(--ease) both; }
+  .now { display:flex; align-items:center; gap:1rem; }
+  .now .icon { font-size:4rem; line-height:1; }
+  .now .temp { font-size:3.5rem; line-height:1; font-weight:700; letter-spacing:-.04em; }
+  .now .desc { color:var(--sub); font-size:.9rem; margin-top:.4rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(5.5rem,1fr)); gap:.6rem; }
+  .scroller { display:flex; overflow-x:auto; scroll-snap-type:x proximity; overscroll-behavior-x:contain;
+              padding-bottom:.3rem; scrollbar-width:none; }
+  .scroller::-webkit-scrollbar { display:none; }
+  .scroller .cell { flex:0 0 5rem; scroll-snap-align:start; }
+  .cell { background:var(--chip); border-radius:16px; padding:.7rem .4rem; text-align:center; font-size:.8rem;
+          color:var(--sub); transition:transform .12s ease-out; }
+  .cell:active { transform:scale(.96); }
+  .cell .icon { font-size:1.7rem; margin:.3rem 0; }
+  .cell b { display:block; font-size:.95rem; color:var(--text); font-weight:600; }
+  .meta { color:var(--sub); font-size:.75rem; margin-top:.8rem; }
+  .apibox { background:#10233f; border-color:rgba(255,255,255,.12); color:#dce6f5; -webkit-backdrop-filter:none; backdrop-filter:none; } /* 어두운 불투명 카드는 블러 필요 없음 */
+  .apibox h2 { color:#9fb6d8; }
+  .apibox code { display:block; word-break:break-all; font-size:.75rem; margin:.2rem 0 .3rem; color:#fff; }
+  .apibox a { color:#8fb8ff; font-size:.8rem; display:inline-block; transition:transform .12s ease-out; }
+  .apibox a:active { transform:scale(.97); }
+  .apibox li { margin-bottom:.9rem; list-style:none; }
+  .apibox ul { padding:0; margin:0; }
+  .apibox .meta { color:#9fb6d8; }
+  footer { color:var(--sub); font-size:.75rem; text-align:center; margin-top:1.5rem; }
+  @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform: none; } }
+  @keyframes pulse { 50% { opacity:.45; } }
+  @media (prefers-reduced-motion:reduce) {
+    #nowBody > *, #hourlyBody > *, #dailyBody > * { animation:opacity-in .2s ease both; }
+    .loading { animation:none; }
+    .cell, .apibox a { transition:none; }
+  }
+  @keyframes opacity-in { from { opacity:0; } to { opacity:1; } }
+  @media (prefers-reduced-transparency:reduce) {
+    .card { background:#fff; -webkit-backdrop-filter:none; backdrop-filter:none; }
+    .apibox { background:#10233f; }
+  }
+  /* 다크 모드: 토글로 고른 값(data-theme)이 시스템 설정보다 우선 */
+  :root[data-theme=dark] { --bg:#0b0f17; --glass:rgba(40,44,54,.62); --edge:rgba(255,255,255,.1); --text:#f5f5f7; --sub:#a1a1a6;
+          --chip:rgba(255,255,255,.08); --err:#ff6961; color-scheme:dark; }
+  :root[data-theme=dark] body::before { background:radial-gradient(1200px 600px at 20% -10%,#1b2f55 0,transparent 60%),
+                    radial-gradient(900px 500px at 100% 0,#3a2418 0,transparent 55%); }
+  :root[data-theme=dark] .card { box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 8px 30px rgba(0,0,0,.35); }
+  @media (prefers-color-scheme:dark) {
+    :root:not([data-theme=light]) { --bg:#0b0f17; --glass:rgba(40,44,54,.62); --edge:rgba(255,255,255,.1); --text:#f5f5f7; --sub:#a1a1a6;
+            --chip:rgba(255,255,255,.08); --err:#ff6961; color-scheme:dark; }
+    :root:not([data-theme=light]) body::before { background:radial-gradient(1200px 600px at 20% -10%,#1b2f55 0,transparent 60%),
+                      radial-gradient(900px 500px at 100% 0,#3a2418 0,transparent 55%); }
+    :root:not([data-theme=light]) .card { box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 8px 30px rgba(0,0,0,.35); }
+  }
+  main { position:relative; }
+  h1 { padding-right:5rem; }
+  /* 스위치 토글: 손잡이가 미끄러지며 해/달 쪽으로 이동 */
+  .theme { position:absolute; top:0; right:0; width:3.5rem; height:2rem; padding:0; border:1px solid var(--edge); border-radius:999px;
+           background:#cfe0fb; cursor:pointer; transition:background .35s var(--ease), transform .12s ease-out; }
+  .theme[aria-checked=true] { background:#2c3a5c; }
+  .theme:active { transform:scale(.96); }
+  .theme:focus-visible { outline:3px solid #2f6fed; outline-offset:2px; }
+  .theme .ico { position:absolute; top:50%; transform:translateY(-50%); font-size:.8rem; line-height:1; opacity:.55; }
+  .theme .sun { right:.45rem; } .theme .moon { left:.45rem; }
+  .theme .knob { position:absolute; top:.17rem; left:.17rem; width:1.5rem; height:1.5rem; border-radius:50%; background:#fff;
+                 box-shadow:0 1px 4px rgba(0,0,0,.3); transition:transform .4s cubic-bezier(.34,1.4,.64,1); }
+  .theme[aria-checked=true] .knob { transform:translateX(1.5rem); }
+  @media (prefers-reduced-motion:reduce) { .theme, .theme .knob { transition:none; } }
+</style>
+</head>
+<body>
+<main>
+  <button class="theme" id="theme" type="button" role="switch" aria-checked="false" aria-label="다크 모드"><span class="ico moon" aria-hidden="true">🌙</span><span class="ico sun" aria-hidden="true">☀️</span><span class="knob"></span></button>
+  <h1>🌤️ 서울 날씨</h1>
+  <p class="lead">Open-Meteo API로 불러온 서울의 날씨예요.</p>
+
+  <section class="card" id="nowCard">
+    <h2>지금 날씨</h2>
+    <div id="nowBody" class="loading">불러오는 중…</div>
+  </section>
+
+  <section class="card" id="hourlyCard">
+    <h2>앞으로 12시간</h2>
+    <div id="hourlyBody" class="loading">불러오는 중…</div>
+  </section>
+
+  <section class="card" id="dailyCard">
+    <h2>7일 예보</h2>
+    <div id="dailyBody" class="loading">불러오는 중…</div>
+  </section>
+
+  <section class="card apibox">
+    <h2>🔌 이 화면이 쓰는 API</h2>
+    <ul id="apiList"></ul>
+    <div class="meta">주소의 latitude/longitude를 바꾸고 새로고침하면 다른 도시의 날씨가 나와요.</div>
+  </section>
+
+  <footer>Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener" style="color:inherit">Open-Meteo.com</a></footer>
+</main>
+
+<script>
+const API = {
+  now:    "https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,weather_code&timezone=Asia%2FSeoul", // 🔌 지금 날씨
+  hourly: "https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&hourly=temperature_2m,weather_code&forecast_hours=12&timezone=Asia%2FSeoul", // 🔌 시간별 예보
+  daily:  "https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FSeoul" // 🔌 7일 예보
+};
+
+const WEATHER = {
+  0:["☀️","맑음"],1:["🌤️","대체로 맑음"],2:["⛅","구름 조금"],3:["☁️","흐림"],
+  45:["🌫️","안개"],48:["🌫️","안개"],51:["🌦️","가벼운 이슬비"],53:["🌦️","이슬비"],55:["🌦️","강한 이슬비"],
+  61:["🌧️","약한 비"],63:["🌧️","비"],65:["🌧️","강한 비"],71:["🌨️","약한 눈"],73:["🌨️","눈"],75:["❄️","강한 눈"],
+  80:["🌦️","소나기"],81:["🌦️","소나기"],82:["⛈️","강한 소나기"],95:["⛈️","뇌우"],96:["⛈️","뇌우"],99:["⛈️","뇌우"]
+};
+const wx = c => WEATHER[c] || ["🌡️","알 수 없음"];
+
+// 한 카드가 실패해도 다른 카드는 보이도록 각각 따로 부른다
+async function load(url, bodyId, render) {
+  const el = document.getElementById(bodyId);
+  try {
+    const res = await fetch(url); // 🔌 API 호출
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    render(await res.json(), el);
+    el.classList.remove("loading");
+  } catch (e) {
+    el.className = "error";
+    el.textContent = "⚠️ 불러오지 못했어요. 잠시 뒤 새로고침해 주세요. (" + e.message + ")";
+  }
+}
+
+load(API.now, "nowBody", (d, el) => {
+  const c = d.current, [icon, text] = wx(c.weather_code);
+  el.innerHTML =
+    `<div class="now"><div class="icon">${icon}</div><div>
+       <div class="temp">${Math.round(c.temperature_2m)}°C</div>
+       <div class="desc">${text} · 체감 ${Math.round(c.apparent_temperature)}°C · 습도 ${c.relative_humidity_2m}% · 바람 ${c.wind_speed_10m}km/h</div>
+     </div></div>
+     <div class="meta">기준 시각: ${c.time.replace("T"," ")} (KST)</div>`;
+});
+
+load(API.hourly, "hourlyBody", (d, el) => {
+  const h = d.hourly;
+  el.innerHTML = '<div class="grid scroller">' + h.time.map((t, i) =>
+    `<div class="cell">${t.slice(11,16)}<div class="icon">${wx(h.weather_code[i])[0]}</div><b>${Math.round(h.temperature_2m[i])}°</b></div>`
+  ).join("") + '</div><div class="meta">예보 시작: ' + h.time[0].replace("T"," ") + ' (KST)</div>';
+});
+
+load(API.daily, "dailyBody", (d, el) => {
+  const x = d.daily, days = ["일","월","화","수","목","금","토"];
+  el.innerHTML = '<div class="grid">' + x.time.map((t, i) => {
+    const dt = new Date(t + "T00:00:00");
+    return `<div class="cell">${t.slice(5)} (${days[dt.getDay()]})<div class="icon">${wx(x.weather_code[i])[0]}</div>
+      <b>${Math.round(x.temperature_2m_max[i])}° / ${Math.round(x.temperature_2m_min[i])}°</b></div>`;
+  }).join("") + '</div><div class="meta">예보 기준 날짜: ' + x.time[0] + ' ~ ' + x.time[x.time.length-1] + '</div>';
+});
+
+// 🔌 상자: 실제로 부른 주소와 원본 JSON 링크
+const labels = { now:"지금 날씨", hourly:"시간별 예보", daily:"7일 예보" };
+document.getElementById("apiList").innerHTML = Object.keys(API).map(k =>
+  `<li><b>${labels[k]}</b><code></code><a target="_blank" rel="noopener">새 탭에서 원본 JSON 보기 ↗</a></li>`
+).join("");
+document.querySelectorAll("#apiList li").forEach((li, i) => {
+  const url = Object.values(API)[i];
+  li.querySelector("code").textContent = url;
+  li.querySelector("a").href = url;
+});
+
+// 라이트/다크 토글: 고른 값은 기억해 두고, 없으면 기기 설정을 따른다
+(function () {
+  const root = document.documentElement, btn = document.getElementById("theme");
+  const isDark = () => root.dataset.theme
+    ? root.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  function paint() {
+    btn.setAttribute("aria-checked", isDark());
+  }
+  try { const s = localStorage.getItem("theme"); if (s) root.dataset.theme = s; } catch (e) {}
+  btn.onclick = () => {
+    root.dataset.theme = isDark() ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+    paint();
+  };
+  paint();
+})();
+</script>
+</body>
+</html>

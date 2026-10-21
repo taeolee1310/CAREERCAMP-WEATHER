@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>색 팔레트 찾기</title>
+<style>
+  :root { --bg:#eaf1fb; --card:#fff; --text:#1d1d1f; --sub:#6e6e73; --err:#d70015; --line:#d9e2f1; --chip:#f2f6fc; --accent:#2f6fed;
+          --ease:cubic-bezier(.23,1,.32,1); --edge:var(--line); }
+  :root[data-theme=dark] { --bg:#0b0f17; --card:#161b26; --text:#f5f5f7; --sub:#a1a1a6; --err:#ff6961; --line:#2e3648; --chip:#1d2433; --accent:#3b6fe0; color-scheme:dark; }
+  @media (prefers-color-scheme:dark) {
+    :root:not([data-theme=light]) { --bg:#0b0f17; --card:#161b26; --text:#f5f5f7; --sub:#a1a1a6; --err:#ff6961; --line:#2e3648; --chip:#1d2433; --accent:#3b6fe0; color-scheme:dark; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:40px 16px 56px; color:var(--text); min-height:100vh; background:var(--bg);
+         font:100%/1.5 system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; }
+  main { max-width:720px; margin:0 auto; }
+  h1 { font-size:clamp(1.75rem,5vw,2.5rem); line-height:1.1; letter-spacing:-.03em; margin:0 0 .4rem; }
+  .lead { color:var(--sub); font-size:.95rem; margin:0 0 1.5rem; }
+  form { display:flex; gap:.5rem; margin-bottom:1rem; }
+  input[type=text] { flex:1; min-width:0; font:inherit; font-size:1rem; padding:.7rem 1rem; border:1px solid var(--line); border-radius:14px; background:var(--card); color:var(--text); }
+  input[type=color] { width:52px; min-height:44px; padding:3px; border:1px solid var(--line); border-radius:14px; background:var(--card); cursor:pointer; }
+  input:focus-visible, button:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  .go { font:inherit; font-weight:600; padding:.7rem 1.2rem; border:0; border-radius:14px; background:var(--accent); color:#fff; cursor:pointer;
+        min-height:44px; transition:transform .12s ease-out; }
+  .go:active { transform:scale(.97); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:20px; padding:1.25rem 1.4rem; margin-bottom:1rem; }
+  .card h2 { font-size:.8rem; margin:0 0 .9rem; color:var(--sub); font-weight:600; letter-spacing:.04em; }
+  .loading { color:var(--sub); animation:pulse 1.4s ease-in-out infinite; }
+  .error { color:var(--err); font-size:.9rem; }
+  .body > .in, .swatches > .sw { animation:rise .35s var(--ease) both; }
+  .hero { display:flex; gap:1rem; align-items:center; }
+  .big { width:96px; height:96px; flex:none; border-radius:22px; border:1px solid var(--line); }
+  .name { font-size:1.6rem; font-weight:700; letter-spacing:-.02em; line-height:1.2; }
+  .vals { color:var(--sub); font-size:.85rem; margin-top:.3rem; font-variant-numeric:tabular-nums; }
+  .swatches { display:grid; grid-template-columns:repeat(auto-fit,minmax(6.5rem,1fr)); gap:.6rem; }
+  .sw { font:inherit; min-height:84px; padding:.7rem .6rem; border:1px solid var(--line); border-radius:16px; text-align:left; cursor:pointer;
+        display:flex; flex-direction:column; justify-content:flex-end; transition:transform .12s ease-out; }
+  .sw:active { transform:scale(.96); }
+  .sw b { font-size:.9rem; letter-spacing:.02em; }
+  .sw span { font-size:.72rem; opacity:.85; }
+  .meta { color:var(--sub); font-size:.75rem; margin-top:.8rem; }
+  .apibox { background:#10233f; border-color:#10233f; color:#dce6f5; }
+  .apibox h2 { color:#9fb6d8; }
+  .apibox ul { padding:0; margin:0; }
+  .apibox li { list-style:none; margin-bottom:.9rem; }
+  .apibox code { display:block; word-break:break-all; font-size:.75rem; margin:.2rem 0 .3rem; color:#fff; }
+  .apibox a { color:#8fb8ff; font-size:.8rem; }
+  .apibox .meta { color:#9fb6d8; }
+  footer { color:var(--sub); font-size:.75rem; text-align:center; margin-top:1.5rem; }
+  @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  @keyframes pulse { 50% { opacity:.45; } }
+  @keyframes opacity-in { from { opacity:0; } to { opacity:1; } }
+  @media (prefers-reduced-motion:reduce) {
+    .body > .in, .swatches > .sw { animation:opacity-in .2s ease both; }
+    .loading { animation:none; }
+    .go, .sw { transition:none; }
+  }
+  main { position:relative; }
+  h1 { padding-right:5rem; }
+  /* 스위치 토글: 손잡이가 미끄러지며 해/달 쪽으로 이동 */
+  .theme { position:absolute; top:0; right:0; width:3.5rem; height:2rem; padding:0; border:1px solid var(--edge); border-radius:999px;
+           background:#cfe0fb; cursor:pointer; transition:background .35s var(--ease), transform .12s ease-out; }
+  .theme[aria-checked=true] { background:#2c3a5c; }
+  .theme:active { transform:scale(.96); }
+  .theme:focus-visible { outline:3px solid #2f6fed; outline-offset:2px; }
+  .theme .ico { position:absolute; top:50%; transform:translateY(-50%); font-size:.8rem; line-height:1; opacity:.55; }
+  .theme .sun { right:.45rem; } .theme .moon { left:.45rem; }
+  .theme .knob { position:absolute; top:.17rem; left:.17rem; width:1.5rem; height:1.5rem; border-radius:50%; background:#fff;
+                 box-shadow:0 1px 4px rgba(0,0,0,.3); transition:transform .4s cubic-bezier(.34,1.4,.64,1); }
+  .theme[aria-checked=true] .knob { transform:translateX(1.5rem); }
+  @media (prefers-reduced-motion:reduce) { .theme, .theme .knob { transition:none; } }
+</style>
+</head>
+<body>
+<main>
+  <button class="theme" id="theme" type="button" role="switch" aria-checked="false" aria-label="다크 모드"><span class="ico moon" aria-hidden="true">🌙</span><span class="ico sun" aria-hidden="true">☀️</span><span class="knob"></span></button>
+  <h1>🎨 색 팔레트 찾기</h1>
+  <p class="lead">색 코드를 넣으면 이름과 보색, 비슷한 색을 찾아 줘요. 칸을 누르면 그 색으로 다시 찾아요.</p>
+
+  <form id="form">
+    <input id="pick" type="color" value="#24b1e0" aria-label="색 고르기">
+    <input id="hex" type="text" value="#24B1E0" placeholder="색 코드 (예: #24B1E0)" aria-label="색 코드" autocomplete="off" spellcheck="false" maxlength="7">
+    <button class="go" type="submit">찾기</button>
+  </form>
+
+  <section class="card">
+    <h2>① 이 색은?</h2>
+    <div id="idBody" class="body"></div>
+  </section>
+
+  <section class="card">
+    <h2>② 보색 (반대편 색)</h2>
+    <div id="cmpBody" class="body"></div>
+  </section>
+
+  <section class="card">
+    <h2>③ 비슷한 색 (유사색)</h2>
+    <div id="anaBody" class="body"></div>
+  </section>
+
+  <section class="card apibox">
+    <h2>🔌 이 화면이 쓰는 API</h2>
+    <ul id="apiList"></ul>
+    <div class="meta">색 코드를 바꾸고 다시 찾으면 주소의 hex= 값이 바뀌어요. 색 이름은 API가 영어로만 줘요.</div>
+  </section>
+
+  <footer>Color data by <a href="https://www.thecolorapi.com/" target="_blank" rel="noopener" style="color:inherit">The Color API</a></footer>
+</main>
+
+<script>
+const API = {
+  id:  hex => "https://www.thecolorapi.com/id?format=json&hex=" + hex, // 🔌 색 이름·RGB·HSL
+  cmp: hex => "https://www.thecolorapi.com/scheme?format=json&mode=complement&count=2&hex=" + hex, // 🔌 보색
+  ana: hex => "https://www.thecolorapi.com/scheme?format=json&mode=analogic&count=5&hex=" + hex // 🔌 유사색
+};
+const LABELS = { id:"① 색 정보", cmp:"② 보색", ana:"③ 유사색" };
+
+const $ = id => document.getElementById(id);
+const used = {};
+let runId = 0;
+
+// API는 엉터리 코드를 넣어도 200으로 NaN을 주니까, 부르기 전에 우리가 먼저 검사한다
+function cleanHex(v) {
+  let h = v.trim().replace(/^#/, "");
+  if (/^[0-9a-f]{3}$/i.test(h)) h = h.split("").map(c => c + c).join("");
+  return /^[0-9a-f]{6}$/i.test(h) ? h.toUpperCase() : null;
+}
+const esc = s => String(s).replace(/[<>&"]/g, "");
+
+function show(el, cls, html) { el.className = "body " + cls; el.innerHTML = html; }
+function fail(el, e) { show(el, "error", ""); el.textContent = "⚠️ 불러오지 못했어요. 잠시 뒤 다시 찾아 주세요. (" + e.message + ")"; }
+async function getJSON(key, url) {
+  used[key] = url;
+  renderApiBox();
+  const res = await fetch(url); // 🔌 API 호출
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+function sw(c, i) {
+  const hex = c.hex.value.replace("#", ""), fg = c.contrast.value; // API가 알려 주는 읽기 쉬운 글자색
+  return `<button type="button" class="sw" data-hex="${esc(hex)}" style="background:${esc(c.hex.value)};color:${esc(fg)};animation-delay:${i * 50}ms"
+    aria-label="${esc(c.name.value)} ${esc(c.hex.value)} 로 다시 찾기"><b>${esc(c.hex.value)}</b><span>${esc(c.name.value)}</span></button>`;
+}
+
+async function search(raw) {
+  const hex = cleanHex(raw);
+  const my = ++runId;
+  const idEl = $("idBody"), cmpEl = $("cmpBody"), anaEl = $("anaBody");
+  if (!hex) {
+    [idEl, cmpEl, anaEl].forEach(el => show(el, "error", "색 코드는 #24B1E0처럼 영문·숫자 6자리로 넣어 주세요."));
+    return;
+  }
+  $("hex").value = "#" + hex; $("pick").value = "#" + hex.toLowerCase();
+  Object.keys(used).forEach(k => delete used[k]);
+  [idEl, cmpEl, anaEl].forEach(el => show(el, "loading", "불러오는 중…"));
+
+  // 세 카드는 서로 기다리지 않는다: 하나가 실패해도 나머지는 보인다
+  await Promise.all([
+    getJSON("id", API.id(hex)).then(d => {
+      if (my !== runId) return;
+      show(idEl, "", `<div class="in hero"><div class="big" style="background:${esc(d.hex.value)}"></div><div>
+        <div class="name">${esc(d.name.value)}</div>
+        <div class="vals">${esc(d.hex.value)} · ${esc(d.rgb.value)} · ${esc(d.hsl.value)}</div>
+        <div class="vals">${d.name.exact_match_name ? "이름과 정확히 같은 색" : "가장 가까운 이름: " + esc(d.name.closest_named_hex)}</div></div></div>`);
+    }).catch(e => { if (my === runId) fail(idEl, e); }),
+
+    getJSON("cmp", API.cmp(hex)).then(d => {
+      if (my !== runId) return;
+      show(cmpEl, "", `<div class="swatches">${d.colors.map(sw).join("")}</div>
+        <div class="meta">왼쪽이 보색, 오른쪽이 방금 고른 색이에요.</div>`);
+    }).catch(e => { if (my === runId) fail(cmpEl, e); }),
+
+    getJSON("ana", API.ana(hex)).then(d => {
+      if (my !== runId) return;
+      show(anaEl, "", `<div class="swatches">${d.colors.map(sw).join("")}</div>
+        <div class="meta">색상환에서 이웃한 색 5개예요.</div>`);
+    }).catch(e => { if (my === runId) fail(anaEl, e); })
+  ]);
+  if (my === runId) renderApiBox();
+}
+
+function renderApiBox() {
+  const keys = Object.keys(LABELS), list = $("apiList");
+  list.innerHTML = keys.map(k => `<li><b>${LABELS[k]}</b><code></code><a target="_blank" rel="noopener">새 탭에서 원본 JSON 보기 ↗</a></li>`).join("");
+  list.querySelectorAll("li").forEach((li, i) => {
+    const url = used[keys[i]];
+    li.querySelector("code").textContent = url || "아직 부르지 않았어요";
+    if (url) li.querySelector("a").href = url; else li.querySelector("a").remove();
+  });
+}
+
+$("form").addEventListener("submit", e => { e.preventDefault(); search($("hex").value); });
+$("pick").addEventListener("input", e => search(e.target.value));
+document.querySelector("main").addEventListener("click", e => {
+  const b = e.target.closest(".sw");
+  if (b) search(b.dataset.hex);
+});
+renderApiBox();
+search($("hex").value);
+
+// 라이트/다크 토글: 고른 값은 기억해 두고, 없으면 기기 설정을 따른다
+(function () {
+  const root = document.documentElement, btn = document.getElementById("theme");
+  const isDark = () => root.dataset.theme
+    ? root.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  function paint() {
+    btn.setAttribute("aria-checked", isDark());
+  }
+  try { const s = localStorage.getItem("theme"); if (s) root.dataset.theme = s; } catch (e) {}
+  btn.onclick = () => {
+    root.dataset.theme = isDark() ? "light" : "dark";
+    try { localStorage.setItem("theme", root.dataset.theme); } catch (e) {}
+    paint();
+  };
+  paint();
+})();
+</script>
+</body>
+</html>
